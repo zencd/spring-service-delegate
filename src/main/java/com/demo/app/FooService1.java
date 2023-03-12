@@ -7,8 +7,8 @@ import org.springframework.stereotype.Service;
  * A specific service delegate.
  */
 @Service
-@IfBilling({"BILLING1", "BILLING2"})
-public class FooServiceOld implements FooService {
+@IfBilling({"BILLING1"})
+public class FooService1 implements FooService {
 
     @Override
     public String getSome() {

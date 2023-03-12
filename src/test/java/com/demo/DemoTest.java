@@ -15,6 +15,6 @@ class DemoTest {
 
 	@Test
 	void serviceDelegatedProperly() {
-		assertEquals("a value from com.demo.app.FooServiceOld", fooService.getSome());
+		assertEquals("a value from com.demo.app.FooService2", fooService.getSome());
 	}
 }
