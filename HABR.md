@@ -3,49 +3,48 @@
 ## Общая задача
 
     @Autowired
-    FooService fooService;
+    UserService userService;
 
 Есть некий спринг-сервис и несколько его реализаций (делегатов).
-Хочется в динамике распределять вызовы между этими реализациями, в зависимости от рантайм-обстоятельств.
-В этом примере решение кого вызывать принимается, сравнивая регион клиента (выводится из http-запроса)
-с регионом, прописанном на делегате.
+Хочется в динамике распределять вызовы между этими реализациями, в зависимости от запроса,
+в данном случае от региона пользователя.
 
 Ссылка не демо-проект в конце.
 
 ## Обычное, неинтересное, статичное решение
 
-Вобщем-то можно всё это реализовать и в статике, но есть проблема:
-придётся писать больше клиентского кода — 
-для каждого делегируемого сервиса нужно явно определять свой `DelegatingFooService`,
-чего хотелось бы избежать.
+Вобщем-то можно всё это реализовать и в "статике", но тут появляется проблема:
+придётся писать больше клиентского кода; конкретно, 
+для каждого делегируемого сервиса нужно руками определять делегирующий бин.
+Весь смысл данной заметки — как этой обязанности избежать.
 
-    interface FooService { }
+    interface UserService { }
 
     @Primary
     @Service
-    class DelegatingFooService implements FooService {
-        Map<String,FooService> delegateByName;
-        // делегируем вызовы на FooService1 или FooService2
+    class DelegatingUserService implements UserService {
+        Map<String,UserService> delegateByName;
+        // делегируем вызовы на UserServiceRu или UserServiceWorld
     }
 
     @Service
-    class FooService1 implements FooService { }
+    class UserServiceRu implements UserService { }
 
     @Service
-    class FooService2 implements FooService { }
+    class UserServiceWorld implements UserService { }
 
 ## Желаемый дизайн
 
     @DelegatedService
-    interface FooService { }
+    interface UserService { }
 
     @Service
     @IfRegion("RU") // условие, при котором будет вызываться именно он
-    class FooServiceRu implements FooService { }
+    class UserServiceRu implements UserService { }
 
     @Service
     @IfRegion("WORLD") // другое условие
-    class FooServiceWorld implements FooService { }
+    class UserServiceWorld implements UserService { }
 
 ## Новое, динамическое решение
 
@@ -61,7 +60,7 @@
         }
     }
 
-Шаг 2. Там найдём все сервисы (джава интерфейсы), аннотированных как наш `DelegatedService`:
+Шаг 2. Там найдём все сервисы (интерфейсы), аннотированных как наш `DelegatedService`:
 
     Set<Class> whoAnnotated = new Reflections("com.demo").getTypesAnnotatedWith(DelegatedService.class);
     List<Class> interfaces = whoAnnotated.stream().filter(Class::isInterface).toList();
@@ -75,30 +74,30 @@
 Того, который будет распределять ответственность на конкретных исполнителей (делегатов).
 
     var beanDef = new GenericBeanDefinition();
-    beanDef.setBeanClass(interfaceClass); // FooService.class
+    beanDef.setBeanClass(interfaceClass); // UserService.class
     beanDef.setFactoryBeanName("DelegatedServiceBeanFactory"); // имя фактори бина
     beanDef.setFactoryMethodName("createBean"); // имя метода в фактори бине, который создаёт новый инстанс
     beanDef.setPrimary(true); // назначаем его главным, во избежание конфликта
     registry.registerBeanDefinition(beanName, beanDef); // регистрируем factory bean
 
-Шаг 4. Определим factory bean. Он создаст нам новый экземпляр бина `FooService`,
+Шаг 4. Определим factory bean. Он создаст нам новый экземпляр бина `UserService`,
 используя обычный динамический прокси `java.lang.reflect.Proxy`:
 
     class DelegatedServiceBeanFactory {
-        Object createBean(Class<?> serviceInterface) {
+        Object createBean(Class serviceInterface) {
             return Proxy.newProxyInstance(clazz.getClassLoader(), new Class[] {serviceInterface}, this);
         }
     }
 
-Шаг 5. Реализация динамического прокси. В нём, во время исполнения, находим делегата
-(в данном случае, сравнивая текущий регион с регионом, прописаном на делегате),
-и перенаправляем любое действие на него.
+Шаг 5. Реализация динамического прокси. В нём, во время исполнения, находим делегата,
+сравнивая регион пользователя с регионом, прописаном на делегате,
+и перенаправляем все действия на него.
 
     Object invoke(Object target, Method method, Object[] args) {
-        Class<?> delegatedService = method.getDeclaringClass();
-        Map<String,Object> beanByName = applicationContext.getBeansOfType(delegatedService);
+        Class delegatedService = method.getDeclaringClass();
+        Map<String,Object> delegateBeanByName = applicationContext.getBeansOfType(delegatedService);
         String currentRegionFromRequest = ...
-        Object delegateBean = ... // найти среди всех делагатов того, который сделает работу
+        Object delegateBean = ... // найти среди всех делагатов наиболее подходящего
         return method.invoke(delegateBean, args);
     }
 
