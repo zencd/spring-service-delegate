@@ -12,19 +12,6 @@
 
 Ссылка не демо-проект в конце.
 
-## Желаемый дизайн
-
-    @DelegatedService
-    interface FooService { }
-
-    @Service
-    @IfRegion("RU") // условие, при котором будет вызываться именно он
-    class FooServiceRu implements FooService { }
-
-    @Service
-    @IfRegion("WORLD") // другое условие
-    class FooServiceWorld implements FooService { }
-
 ## Обычное, неинтересное, статичное решение
 
 Вобщем-то можно всё это реализовать и в статике, но есть проблема:
@@ -46,6 +33,19 @@
 
     @Service
     class FooService2 implements FooService { }
+
+## Желаемый дизайн
+
+    @DelegatedService
+    interface FooService { }
+
+    @Service
+    @IfRegion("RU") // условие, при котором будет вызываться именно он
+    class FooServiceRu implements FooService { }
+
+    @Service
+    @IfRegion("WORLD") // другое условие
+    class FooServiceWorld implements FooService { }
 
 ## Новое, динамическое решение
 
@@ -94,7 +94,7 @@
 (в данном случае, сравнивая текущий регион с регионом, прописаном на делегате),
 и перенаправляем любое действие на него.
 
-    Object invoke(Object target, Method method, Object[] args) throws Throwable {
+    Object invoke(Object target, Method method, Object[] args) {
         Class<?> delegatedService = method.getDeclaringClass();
         Map<String,Object> beanByName = applicationContext.getBeansOfType(delegatedService);
         String currentRegionFromRequest = ...
