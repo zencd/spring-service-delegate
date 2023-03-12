@@ -11,9 +11,11 @@
 Хочется в динамике распределять вызовы между этими реализациями в зависимости от рантайм-обстоятельств.
 В этом примере решение принимается, сравнивая текущий биллинг клиента (выводится из http-запроса)
 с биллингом, прописанном на делегате.
-Технически, биллинг - это константа: "BILLING1" или "BILLING2".
+Технически, биллинг - это просто константа: "BILLING1" или "BILLING2".
 
-## Желаемые дизайн
+Ссылка не демо-проект в конце.
+
+## Желанный дизайн
 
     @DelegatedService
     interface FooService { }
@@ -29,8 +31,8 @@
 ## Обычное, неинтересное, статичное решение
 
 Вобщем-то можно всё это реализовать и в статике, но есть проблема:
-нужно писать больше клиентского кода -
-для каждого делегируемого сервиса придётся явно определять свой `DelegatingFooService`,
+придётся писать больше клиентского кода -
+для каждого делегируемого сервиса нужно явно определять свой `DelegatingFooService`,
 чего хотелось бы избежать.
 
     interface FooService { }
@@ -50,7 +52,7 @@
 
 ## Новое, динамическое решение
 
-Решение было подсмотрено в
+Принцип был подсмотрен в
 [FeignClientsRegistrar](https://github.com/spring-cloud/spring-cloud-openfeign/blob/main/spring-cloud-openfeign-core/src/main/java/org/springframework/cloud/openfeign/FeignClientsRegistrar.java)
 который делает примерно то же - динамически реализует интерфейсы (бины) feign-клиентов.
 
@@ -82,7 +84,7 @@
     beanDef.setPrimary(true); // назначаем его главным, во избежание конфликта
     registry.registerBeanDefinition(beanName, beanDef); // регистрируем factory bean
 
-Factory bean; он создаёт новый экземпляр, наследующий `FooService`, на лету через обычный динамический прокси `java.lang.reflect.Proxy`:
+Factory bean; он создаёт новый экземпляр, наследующий `FooService`, на лету, через обычный динамический прокси `java.lang.reflect.Proxy`:
 
     class DelegatedServiceBeanFactory {
         public Object createBean(Class<?> serviceInterface) {
