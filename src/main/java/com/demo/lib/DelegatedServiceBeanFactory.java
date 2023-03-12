@@ -11,7 +11,7 @@ import java.util.Arrays;
 
 /**
  * Primary bean factory for an interface annotated with {@link DelegatedService}.
- * That bean will delegate work to a specific service, basing on the current billing.
+ * That bean will delegate work to a specific service, basing on the current region.
  */
 @Component(DelegatedServiceBeanFactory.BEAN_NAME)
 public class DelegatedServiceBeanFactory implements InvocationHandler {
@@ -19,7 +19,7 @@ public class DelegatedServiceBeanFactory implements InvocationHandler {
     public static final String BEAN_NAME = "com.demo.lib.DelegatedServiceBeanFactory";
     public static final String FACTORY_METHOD_NAME = "createBean";
 
-    public static final String currentBilling = "BILLING2"; // FIXME resolve in runtime
+    public static final String currentRegion = "RU"; // FIXME resolve in runtime
 
     @Autowired
     private ApplicationContext applicationContext;
@@ -34,20 +34,20 @@ public class DelegatedServiceBeanFactory implements InvocationHandler {
         Class<?> declaringInterface = method.getDeclaringClass();
         var beanByName = applicationContext.getBeansOfType(declaringInterface);
         var found = beanByName.values().stream()
-                .filter(x -> matchesCurrentBilling(x, currentBilling))
+                .filter(this::matchesCurrentRegion)
                 .findFirst()
                 .orElseThrow(() -> new RuntimeException(
                         "No service found 1) derived from " + declaringInterface.getName()
-                        + " 2) having annotation " + IfBilling.class.getSimpleName()
-                        + " 3) having billing " + currentBilling));
+                        + " 2) having annotation " + IfRegion.class.getSimpleName()
+                        + " 3) having region " + currentRegion));
         return method.invoke(found, args);
     }
 
-    private boolean matchesCurrentBilling(Object service, String currentBilling) {
-        IfBilling anno = service.getClass().getAnnotation(IfBilling.class);
+    private boolean matchesCurrentRegion(Object service) {
+        IfRegion anno = service.getClass().getAnnotation(IfRegion.class);
         if (anno == null) {
             return false;
         }
-        return Arrays.stream(anno.value()).anyMatch(currentBilling::equalsIgnoreCase);
+        return Arrays.stream(anno.value()).anyMatch(currentRegion::equalsIgnoreCase);
     }
 }

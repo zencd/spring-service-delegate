@@ -8,25 +8,24 @@
     FooService fooService;
 
 и несколько его реализаций (делегатов).
-Хочется в динамике распределять вызовы между этими реализациями в зависимости от рантайм-обстоятельств.
-В этом примере решение принимается, сравнивая текущий биллинг клиента (выводится из http-запроса)
-с биллингом, прописанном на делегате.
-Технически, биллинг - это просто константа: "BILLING1" или "BILLING2".
+Хочется в динамике распределять вызовы между этими реализациями, в зависимости от рантайм-обстоятельств.
+В этом примере решение кого вызывать принимается, сравнивая регион клиента (выводится из http-запроса)
+с регионом, прописанном на делегате.
 
 Ссылка не демо-проект в конце.
 
-## Желанный дизайн
+## Желаемый дизайн
 
     @DelegatedService
     interface FooService { }
 
     @Service
-    @IfBilling("BILLING1") // условие, при котором будет вызываться именно он
-    class FooService1 implements FooService { }
+    @IfRegion("RU") // условие, при котором будет вызываться именно он
+    class FooServiceRu implements FooService { }
 
     @Service
-    @IfBilling("BILLING2") // другое условие
-    class FooService2 implements FooService { }
+    @IfRegion("WORLD") // другое условие
+    class FooServiceWorld implements FooService { }
 
 ## Обычное, неинтересное, статичное решение
 
@@ -53,18 +52,18 @@
 ## Новое, динамическое решение
 
 Принцип был подсмотрен в
-[FeignClientsRegistrar](https://github.com/spring-cloud/spring-cloud-openfeign/blob/main/spring-cloud-openfeign-core/src/main/java/org/springframework/cloud/openfeign/FeignClientsRegistrar.java)
+[FeignClientsRegistrar](https://github.com/spring-cloud/spring-cloud-openfeign/blob/main/spring-cloud-openfeign-core/src/main/java/org/springframework/cloud/openfeign/FeignClientsRegistrar.java),
 который делает примерно то же - динамически реализует интерфейсы (бины) feign-клиентов.
 
-Любые новые бины можно динамически определять в ImportBeanDefinitionRegistrar:
+Шаг 1. Любые новые бины можно динамически определять в `ImportBeanDefinitionRegistrar`:
 
-    public class DelegatedServiceBeanRegistrar implements ImportBeanDefinitionRegistrar {
-        public void registerBeanDefinitions(AnnotationMetadata importingClassMetadata, BeanDefinitionRegistry registry) {
+    class DelegatedServiceBeanRegistrar implements ImportBeanDefinitionRegistrar {
+        void registerBeanDefinitions(AnnotationMetadata importingClassMetadata, BeanDefinitionRegistry registry) {
             ...
         }
     }
 
-Там найдём все сервисы (джава интерфейсы), аннотированных как наш `DelegatedService`:
+Шаг 2. Там найдём все сервисы (джава интерфейсы), аннотированных как наш `DelegatedService`:
 
     Set<Class<?>> whoAnnotated = new Reflections("com.demo").getTypesAnnotatedWith(DelegatedService.class);
     var interfaces = whoAnnotated.stream().filter(Class::isInterface).toList();
@@ -72,10 +71,10 @@
         ...
     }
 
-Для каждого `DelegatedService`
-не создаём новый инстанс сервиса, но - лучше - укажем какой factory bean
+Шаг 3. Для каждого `DelegatedService`
+не создаём новый инстанс сервиса, но - лучше - указываем какой factory bean
 умеет создавать новый инстанс сервиса.
-Инстанс, который будет распределять ответственность на конкретных исполнителей (делегатов).
+Того, который будет распределять ответственность на конкретных исполнителей (делегатов).
 
     var beanDef = new GenericBeanDefinition();
     beanDef.setBeanClass(interfaceClass); // FooService.class
@@ -84,22 +83,22 @@
     beanDef.setPrimary(true); // назначаем его главным, во избежание конфликта
     registry.registerBeanDefinition(beanName, beanDef); // регистрируем factory bean
 
-Factory bean; он создаёт новый экземпляр, наследующий `FooService`, на лету, через обычный динамический прокси `java.lang.reflect.Proxy`:
+Шаг 4. Factory bean; он создаёт новый экземпляр, наследующий `FooService`, на лету, через обычный динамический прокси `java.lang.reflect.Proxy`:
 
     class DelegatedServiceBeanFactory {
-        public Object createBean(Class<?> serviceInterface) {
+        Object createBean(Class<?> serviceInterface) {
             return Proxy.newProxyInstance(clazz.getClassLoader(), new Class[] {serviceInterface}, this);
         }
     }
 
-Реализация динамического прокси. В нём в динамике находим делегата
-(в данном случае - сравнивая текущий биллинг с биллингом, прописаном на делегате),
+Шаг 5. Реализация динамического прокси. В нём в динамике находим делегата
+(в данном случае, сравнивая текущий регион с регионом, прописаном на делегате),
 и перенаправляем все действия на него.
 
-    public Object invoke(Object target, Method method, Object[] args) throws Throwable {
-        Class<?> serviceInterface = method.getDeclaringClass();
-        Map<String,Object> beanByName = applicationContext.getBeansOfType(serviceInterface);
-        String currentBilling = ...
+    Object invoke(Object target, Method method, Object[] args) throws Throwable {
+        Class<?> delegatedService = method.getDeclaringClass();
+        Map<String,Object> beanByName = applicationContext.getBeansOfType(delegatedService);
+        String currentRegionFromRequest = ...
         Object delegateBean = ... // найти среди всех делагатов того, который сделает работу
         return method.invoke(delegateBean, args);
     }
