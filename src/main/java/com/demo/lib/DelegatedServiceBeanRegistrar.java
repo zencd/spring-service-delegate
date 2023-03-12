@@ -8,6 +8,7 @@ import org.springframework.beans.factory.support.GenericBeanDefinition;
 import org.springframework.context.annotation.ImportBeanDefinitionRegistrar;
 import org.springframework.core.type.AnnotationMetadata;
 
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -19,7 +20,7 @@ public class DelegatedServiceBeanRegistrar implements ImportBeanDefinitionRegist
     @Override
     public void registerBeanDefinitions(AnnotationMetadata importingClassMetadata, BeanDefinitionRegistry registry) {
         Set<Class<?>> whoAnnotated = new Reflections(LibConfig.BASE_PACKAGE).getTypesAnnotatedWith(DelegatedService.class);
-        var interfaces = whoAnnotated.stream().filter(Class::isInterface).toList();
+        List<Class<?>> interfaces = whoAnnotated.stream().filter(Class::isInterface).toList();
         for (var interfaceClass : interfaces) {
             String beanName = interfaceClass.getName() + ".PrimaryBean";
 

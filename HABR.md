@@ -63,15 +63,15 @@
 
 Шаг 2. Там найдём все сервисы (джава интерфейсы), аннотированных как наш `DelegatedService`:
 
-    Set<Class<?>> whoAnnotated = new Reflections("com.demo").getTypesAnnotatedWith(DelegatedService.class);
-    var interfaces = whoAnnotated.stream().filter(Class::isInterface).toList();
+    Set<Class> whoAnnotated = new Reflections("com.demo").getTypesAnnotatedWith(DelegatedService.class);
+    List<Class> interfaces = whoAnnotated.stream().filter(Class::isInterface).toList();
     for (var interfaceClass : interfaces) {
         ...
     }
 
 Шаг 3. Для каждого `DelegatedService`
 не создаём новый инстанс сервиса, но — лучше — указываем какой factory bean
-умеет создавать новый инстанс сервиса.
+умеет создавать новый инстанс такого сервиса.
 Того, который будет распределять ответственность на конкретных исполнителей (делегатов).
 
     var beanDef = new GenericBeanDefinition();
@@ -81,7 +81,8 @@
     beanDef.setPrimary(true); // назначаем его главным, во избежание конфликта
     registry.registerBeanDefinition(beanName, beanDef); // регистрируем factory bean
 
-Шаг 4. Factory bean; он создаёт новый экземпляр, наследующий `FooService`, на лету, через обычный динамический прокси `java.lang.reflect.Proxy`:
+Шаг 4. Определим factory bean. Он создаст нам новый экземпляр бина `FooService`,
+используя обычный динамический прокси `java.lang.reflect.Proxy`:
 
     class DelegatedServiceBeanFactory {
         Object createBean(Class<?> serviceInterface) {
@@ -89,9 +90,9 @@
         }
     }
 
-Шаг 5. Реализация динамического прокси. В нём в динамике находим делегата
+Шаг 5. Реализация динамического прокси. В нём, во время исполнения, находим делегата
 (в данном случае, сравнивая текущий регион с регионом, прописаном на делегате),
-и перенаправляем все действия на него.
+и перенаправляем любое действие на него.
 
     Object invoke(Object target, Method method, Object[] args) throws Throwable {
         Class<?> delegatedService = method.getDeclaringClass();
